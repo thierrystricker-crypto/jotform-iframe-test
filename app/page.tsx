@@ -7,7 +7,7 @@ type Item = {
   sku: string;
   variant: string;
   price: string;
-  stock: number;
+  stock: number | null;
   productUrl: string;
   variantImage: string;
   image1: string;
@@ -229,19 +229,30 @@ export default function Page() {
                     </div>
 
                     <div style={responsiveRowStyle}>
-                      <strong>Stock</strong>
-                      <span
-                        style={
-                          item.stock === 0
-                            ? styles.stockZero
-                            : item.stock <= 2
-                              ? styles.stockLow
-                              : styles.stockOk
-                        }
-                      >
-                        {item.stock} {item.stock > 1 ? 'pces' : 'pce'}
-                      </span>
-                    </div>
+  <strong>Stock</strong>
+  {item.stock === null ? (
+    <a
+      href={item.productUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={styles.stockCheckLink}
+    >
+      check
+    </a>
+  ) : (
+    <span
+      style={
+        item.stock === 0
+          ? styles.stockZero
+          : item.stock <= 2
+            ? styles.stockLow
+            : styles.stockOk
+      }
+    >
+      {item.stock} {item.stock > 1 ? 'pces' : 'pce'}
+    </span>
+  )}
+</div>
 
                     <div style={responsiveRowStyle}>
                       <strong>Produit</strong>
@@ -492,6 +503,15 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     color: '#9f9f9f',
   },
+  stockUnknown: {
+  color: '#a5a5a5',
+  fontWeight: 700,
+},
+stockCheckLink: {
+  color: '#7fb0ff',
+  fontWeight: 700,
+  textDecoration: 'underline',
+},
   stockOk: {
     color: '#7ee28a',
     fontWeight: 700,

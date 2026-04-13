@@ -70,6 +70,22 @@ type AdminInventoryResponse = {
   errors?: unknown;
 };
 
+type ResultItem = {
+  id: string;
+  sku: string;
+  variant: string;
+  price: string;
+  stock: number | null;
+  productUrl: string;
+  variantImage: string;
+  image1: string;
+  image2: string;
+  image3: string;
+};
+
+let cachedAdminToken: string | null = null;
+let cachedAdminTokenExpiresAt = 0;
+
 function normalize(text: string) {
   return text
     .toLowerCase()
@@ -138,6 +154,12 @@ async function runStorefrontSearch(query: string): Promise<ShopifyProduct[]> {
 }
 
 async function getAdminAccessToken() {
+  const now = Date.now();
+
+  if (cachedAdminToken && now < cachedAdminTokenExpiresAt) {
+    return cachedAdminToken;
+  }
+
   const body = new URLSearchParams();
   body.set('grant_type', 'client_credentials');
   body.set('client_id', ADMIN_CLIENT_ID as string);
@@ -161,7 +183,12 @@ async function getAdminAccessToken() {
     );
   }
 
-  return json.access_token;
+  cachedAdminToken = json.access_token;
+
+  const expiresInMs = (json.expires_in ?? 86400) * 1000;
+  cachedAdminTokenExpiresAt = now + expiresInMs - 5 * 60 * 1000;
+
+  return cachedAdminToken;
 }
 
 async function getAdminAvailableBySku(skus: string[]) {
@@ -230,18 +257,48 @@ async function getAdminAvailableBySku(skus: string[]) {
   return map;
 }
 
+function buildStorefrontItems(products: ShopifyProduct[], words: string[]): ResultItem[] {
+  return products.flatMap((product) => {
+    const productImages = product.images?.nodes ?? [];
+    const variants = product.variants?.nodes ?? [];
+
+    return variants
+      .filter((variant) => {
+        const haystack = normalize(
+          [product.title, variant.title ?? '', variant.sku ?? ''].join(' ')
+        );
+
+        return words.every((word) => haystack.includes(word));
+      })
+      .map((variant) => {
+        const variantNumericId = variant.id.split('/').pop() || '';
+
+        return {
+          id: variant.id,
+          sku: variant.sku ?? '',
+          variant:
+            variant.title && variant.title !== 'Default Title'
+              ? `${product.title} / ${variant.title}`
+              : product.title,
+          price: Number(variant.price.amount).toFixed(2),
+          stock: null,
+          productUrl: product.onlineStoreUrl
+            ? `${product.onlineStoreUrl}?variant=${variantNumericId}`
+            : `https://${SHOP}/products/${product.handle}?variant=${variantNumericId}`,
+          variantImage: variant.image?.url || productImages[0]?.url || '',
+          image1: productImages[1]?.url || '',
+          image2: productImages[2]?.url || '',
+          image3: productImages[3]?.url || '',
+        };
+      });
+  });
+}
+
 export async function GET(request: NextRequest) {
   try {
     if (!SHOP || !STOREFRONT_TOKEN) {
       return NextResponse.json(
         { error: 'Variables Storefront manquantes dans Vercel.' },
-        { status: 500 }
-      );
-    }
-
-    if (!ADMIN_CLIENT_ID || !ADMIN_CLIENT_SECRET) {
-      return NextResponse.json(
-        { error: 'Variables Admin API manquantes dans Vercel.' },
         { status: 500 }
       );
     }
@@ -266,57 +323,37 @@ export async function GET(request: NextRequest) {
           allProductsMap.set(product.handle, product);
         }
       } catch {
-        // ignore une recherche partielle qui échoue
+        // ignore une recherche partielle storefront qui échoue
       }
     }
 
     const products = Array.from(allProductsMap.values());
+    const storefrontItems = buildStorefrontItems(products, words);
 
-    const storefrontItems = products.flatMap((product) => {
-      const productImages = product.images?.nodes ?? [];
-      const variants = product.variants?.nodes ?? [];
+    if (!ADMIN_CLIENT_ID || !ADMIN_CLIENT_SECRET) {
+      return NextResponse.json({ items: storefrontItems });
+    }
 
-      return variants
-        .filter((variant) => {
-          const haystack = normalize(
-            [product.title, variant.title ?? '', variant.sku ?? ''].join(' ')
-          );
-          return words.every((word) => haystack.includes(word));
-        })
-        .map((variant) => {
-          const variantNumericId = variant.id.split('/').pop() || '';
+    try {
+      const skus = storefrontItems.map((item) => item.sku).filter(Boolean);
+      const adminAvailableMap = await getAdminAvailableBySku(skus);
 
-          return {
-            id: variant.id,
-            sku: variant.sku ?? '',
-            variant:
-              variant.title && variant.title !== 'Default Title'
-                ? `${product.title} / ${variant.title}`
-                : product.title,
-            price: Number(variant.price.amount).toFixed(2),
-            stock: variant.quantityAvailable ?? 0,
-            productUrl: product.onlineStoreUrl
-              ? `${product.onlineStoreUrl}?variant=${variantNumericId}`
-              : `https://${SHOP}/products/${product.handle}?variant=${variantNumericId}`,
-            variantImage: variant.image?.url || productImages[0]?.url || '',
-            image1: productImages[1]?.url || '',
-            image2: productImages[2]?.url || '',
-            image3: productImages[3]?.url || '',
-          };
-        });
-    });
+      const items = storefrontItems.map((item) => ({
+        ...item,
+        stock: adminAvailableMap.has(item.sku)
+          ? (adminAvailableMap.get(item.sku) as number)
+          : null,
+      }));
 
-    const skus = storefrontItems.map((item) => item.sku).filter(Boolean);
-    const adminAvailableMap = await getAdminAvailableBySku(skus);
-
-    const items = storefrontItems.map((item) => ({
-      ...item,
-      stock: adminAvailableMap.has(item.sku)
-        ? (adminAvailableMap.get(item.sku) as number)
-        : item.stock,
-    }));
-
-    return NextResponse.json({ items });
+      return NextResponse.json({ items });
+    } catch {
+      return NextResponse.json({
+        items: storefrontItems.map((item) => ({
+          ...item,
+          stock: null,
+        })),
+      });
+    }
   } catch (error) {
     return NextResponse.json(
       { error: 'Erreur serveur', details: String(error) },
