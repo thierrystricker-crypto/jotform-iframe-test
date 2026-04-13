@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const SHOP = process.env.SHOPIFY_STORE_DOMAIN;
-const TOKEN = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
+const STOREFRONT_TOKEN = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
+const ADMIN_CLIENT_ID = process.env.SHOPIFY_ADMIN_CLIENT_ID;
+const ADMIN_CLIENT_SECRET = process.env.SHOPIFY_ADMIN_CLIENT_SECRET;
 
 type ShopifyProduct = {
   title: string;
@@ -40,6 +42,34 @@ type ShopifyResponse = {
   errors?: unknown;
 };
 
+type AdminTokenResponse = {
+  access_token?: string;
+  expires_in?: number;
+  error?: string;
+  error_description?: string;
+};
+
+type AdminInventoryResponse = {
+  data?: {
+    productVariants?: {
+      nodes?: Array<{
+        sku: string | null;
+        inventoryItem?: {
+          inventoryLevels?: {
+            nodes?: Array<{
+              quantities?: Array<{
+                name: string;
+                quantity: number;
+              }>;
+            }>;
+          };
+        } | null;
+      }>;
+    };
+  };
+  errors?: unknown;
+};
+
 function normalize(text: string) {
   return text
     .toLowerCase()
@@ -48,7 +78,7 @@ function normalize(text: string) {
     .trim();
 }
 
-async function runShopifySearch(query: string): Promise<ShopifyProduct[]> {
+async function runStorefrontSearch(query: string): Promise<ShopifyProduct[]> {
   const graphqlQuery = `
     query SearchProducts($query: String!) {
       search(first: 20, types: PRODUCT, query: $query) {
@@ -89,7 +119,7 @@ async function runShopifySearch(query: string): Promise<ShopifyProduct[]> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Shopify-Storefront-Access-Token': TOKEN as string,
+      'X-Shopify-Storefront-Access-Token': STOREFRONT_TOKEN as string,
     },
     body: JSON.stringify({
       query: graphqlQuery,
@@ -101,17 +131,117 @@ async function runShopifySearch(query: string): Promise<ShopifyProduct[]> {
   const json = (await response.json()) as ShopifyResponse;
 
   if (!response.ok || json.errors) {
-    throw new Error('Erreur Shopify');
+    throw new Error('Erreur Shopify Storefront');
   }
 
   return json.data?.search?.nodes ?? [];
 }
 
+async function getAdminAccessToken() {
+  const body = new URLSearchParams();
+  body.set('grant_type', 'client_credentials');
+  body.set('client_id', ADMIN_CLIENT_ID as string);
+  body.set('client_secret', ADMIN_CLIENT_SECRET as string);
+
+  const response = await fetch(`https://${SHOP}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: body.toString(),
+    cache: 'no-store',
+  });
+
+  const json = (await response.json()) as AdminTokenResponse;
+
+  if (!response.ok || !json.access_token) {
+    throw new Error(
+      json.error_description || json.error || 'Impossible d’obtenir le token Admin'
+    );
+  }
+
+  return json.access_token;
+}
+
+async function getAdminAvailableBySku(skus: string[]) {
+  if (!skus.length) return new Map<string, number>();
+
+  const adminToken = await getAdminAccessToken();
+
+  const queryString = skus
+    .filter(Boolean)
+    .map((sku) => `sku:${sku.replace(/"/g, '\\"')}`)
+    .join(' OR ');
+
+  const graphqlQuery = `
+    query VariantInventoryBySku($query: String!) {
+      productVariants(first: 100, query: $query) {
+        nodes {
+          sku
+          inventoryItem {
+            inventoryLevels(first: 1) {
+              nodes {
+                quantities(names: ["available"]) {
+                  name
+                  quantity
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const response = await fetch(`https://${SHOP}/admin/api/2026-04/graphql.json`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Shopify-Access-Token': adminToken,
+    },
+    body: JSON.stringify({
+      query: graphqlQuery,
+      variables: { query: queryString },
+    }),
+    cache: 'no-store',
+  });
+
+  const json = (await response.json()) as AdminInventoryResponse;
+
+  if (!response.ok || json.errors) {
+    throw new Error('Erreur Shopify Admin Inventory');
+  }
+
+  const map = new Map<string, number>();
+
+  for (const node of json.data?.productVariants?.nodes ?? []) {
+    const sku = node.sku ?? '';
+    const qty =
+      node.inventoryItem?.inventoryLevels?.nodes?.[0]?.quantities?.find(
+        (q) => q.name === 'available'
+      )?.quantity ?? 0;
+
+    if (sku) {
+      map.set(sku, qty);
+    }
+  }
+
+  return map;
+}
+
 export async function GET(request: NextRequest) {
   try {
-    if (!SHOP || !TOKEN) {
+    if (!SHOP || !STOREFRONT_TOKEN) {
       return NextResponse.json(
-        { error: 'Variables Shopify manquantes dans Vercel.' },
+        { error: 'Variables Storefront manquantes dans Vercel.' },
+        { status: 500 }
+      );
+    }
+
+    if (!ADMIN_CLIENT_ID || !ADMIN_CLIENT_SECRET) {
+      return NextResponse.json(
+        { error: 'Variables Admin API manquantes dans Vercel.' },
         { status: 500 }
       );
     }
@@ -125,15 +255,13 @@ export async function GET(request: NextRequest) {
     const normalizedQuery = normalize(rawQuery);
     const words = normalizedQuery.split(/\s+/).filter(Boolean);
 
-    const searchQueries = Array.from(
-      new Set([rawQuery, ...words])
-    ).filter(Boolean);
+    const searchQueries = Array.from(new Set([rawQuery, ...words])).filter(Boolean);
 
     const allProductsMap = new Map<string, ShopifyProduct>();
 
     for (const q of searchQueries) {
       try {
-        const products = await runShopifySearch(q);
+        const products = await runStorefrontSearch(q);
         for (const product of products) {
           allProductsMap.set(product.handle, product);
         }
@@ -144,20 +272,15 @@ export async function GET(request: NextRequest) {
 
     const products = Array.from(allProductsMap.values());
 
-    const items = products.flatMap((product) => {
+    const storefrontItems = products.flatMap((product) => {
       const productImages = product.images?.nodes ?? [];
       const variants = product.variants?.nodes ?? [];
 
       return variants
         .filter((variant) => {
           const haystack = normalize(
-            [
-              product.title,
-              variant.title ?? '',
-              variant.sku ?? '',
-            ].join(' ')
+            [product.title, variant.title ?? '', variant.sku ?? ''].join(' ')
           );
-
           return words.every((word) => haystack.includes(word));
         })
         .map((variant) => {
@@ -182,6 +305,16 @@ export async function GET(request: NextRequest) {
           };
         });
     });
+
+    const skus = storefrontItems.map((item) => item.sku).filter(Boolean);
+    const adminAvailableMap = await getAdminAvailableBySku(skus);
+
+    const items = storefrontItems.map((item) => ({
+      ...item,
+      stock: adminAvailableMap.has(item.sku)
+        ? (adminAvailableMap.get(item.sku) as number)
+        : item.stock,
+    }));
 
     return NextResponse.json({ items });
   } catch (error) {
