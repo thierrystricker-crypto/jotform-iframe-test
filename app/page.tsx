@@ -22,8 +22,22 @@ export default function Page() {
   const [openCopyId, setOpenCopyId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [viewportWidth, setViewportWidth] = useState<number>(1400);
 
   const trimmedQuery = useMemo(() => query.trim(), [query]);
+
+  useEffect(() => {
+    function updateWidth() {
+      setViewportWidth(window.innerWidth);
+    }
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+
+    return () => {
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -84,7 +98,9 @@ export default function Page() {
       setOpenCopyId(item.id);
 
       setTimeout(() => {
-        const el = document.getElementById(`copy-input-${item.id}`) as HTMLInputElement | null;
+        const el = document.getElementById(
+          `copy-input-${item.id}`
+        ) as HTMLInputElement | null;
         if (el) {
           el.focus();
           el.select();
@@ -99,11 +115,74 @@ export default function Page() {
     setError('');
   }
 
+  const isMobile = viewportWidth < 700;
+  const isTablet = viewportWidth >= 700 && viewportWidth < 1180;
+  const isLarge = viewportWidth >= 1600;
+
+  const responsiveContainerStyle: React.CSSProperties = {
+    ...styles.container,
+    maxWidth: isLarge ? '1600px' : isTablet ? '1100px' : styles.container.maxWidth,
+  };
+
+  const responsiveCardStyle: React.CSSProperties = {
+    ...styles.card,
+    gridTemplateColumns: isMobile
+      ? '1fr'
+      : isTablet
+        ? '220px minmax(0, 1fr) 120px'
+        : isLarge
+          ? '300px minmax(0, 1fr) 160px'
+          : '260px minmax(0, 1fr) 140px',
+    alignItems: isMobile ? 'start' : 'center',
+  };
+
+  const responsiveImagesStyle: React.CSSProperties = {
+    ...styles.images,
+    gridTemplateColumns: isMobile ? 'repeat(4, 60px)' : 'repeat(4, 1fr)',
+    justifyContent: isMobile ? 'start' : undefined,
+  };
+
+  const responsiveActionsStyle: React.CSSProperties = {
+    ...styles.actions,
+    width: isMobile ? '100%' : undefined,
+  };
+
+  const responsiveCopyButtonStyle: React.CSSProperties = {
+    ...styles.copyButton,
+    width: '100%',
+  };
+
+  const responsiveCopyButtonSuccessStyle: React.CSSProperties = {
+    ...styles.copyButtonSuccess,
+    width: '100%',
+  };
+
+  const responsiveTitleStyle: React.CSSProperties = {
+    ...styles.title,
+    fontSize: isMobile ? '20px' : isTablet ? '22px' : '24px',
+  };
+
+  const responsiveSubtitleStyle: React.CSSProperties = {
+    ...styles.subtitle,
+    fontSize: isMobile ? '13px' : '14px',
+  };
+
+  const responsiveInputStyle: React.CSSProperties = {
+    ...styles.input,
+    fontSize: isMobile ? '14px' : '15px',
+  };
+
+  const responsiveRowStyle: React.CSSProperties = {
+    ...styles.row,
+    gridTemplateColumns: isMobile ? '72px minmax(0, 1fr)' : '78px minmax(0, 1fr)',
+    fontSize: isMobile ? '13px' : '14px',
+  };
+
   return (
     <main style={styles.page}>
-      <div style={styles.container}>
-        <h1 style={styles.title}>Recherche articles Shopify</h1>
-        <p style={styles.subtitle}>
+      <div style={responsiveContainerStyle}>
+        <h1 style={responsiveTitleStyle}>Recherche articles Shopify</h1>
+        <p style={responsiveSubtitleStyle}>
           Recherche réelle sur Shopify : SKU, variante, prix, stock, images.
         </p>
 
@@ -111,7 +190,7 @@ export default function Page() {
           <input
             type="text"
             placeholder="Rechercher un article, une variante ou un SKU"
-            style={styles.input}
+            style={responsiveInputStyle}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -138,31 +217,31 @@ export default function Page() {
 
             return (
               <div key={item.id} style={styles.cardWrap}>
-                <div style={styles.card}>
-                  <div style={styles.images}>
-                    <ImageBox src={item.variantImage} label="Var." />
-                    <ImageBox src={item.image1} label="2" />
-                    <ImageBox src={item.image2} label="3" />
-                    <ImageBox src={item.image3} label="4" />
+                <div style={responsiveCardStyle}>
+                  <div style={responsiveImagesStyle}>
+                    <ImageBox src={item.variantImage} label="Var." isMobile={isMobile} />
+                    <ImageBox src={item.image1} label="2" isMobile={isMobile} />
+                    <ImageBox src={item.image2} label="3" isMobile={isMobile} />
+                    <ImageBox src={item.image3} label="4" isMobile={isMobile} />
                   </div>
 
                   <div style={styles.meta}>
-                    <div style={styles.row}>
+                    <div style={responsiveRowStyle}>
                       <strong>SKU</strong>
                       <span>{item.sku || '—'}</span>
                     </div>
 
-                    <div style={styles.row}>
+                    <div style={responsiveRowStyle}>
                       <strong>Variante</strong>
                       <span style={styles.variantText}>{item.variant}</span>
                     </div>
 
-                    <div style={styles.row}>
+                    <div style={responsiveRowStyle}>
                       <strong>Prix</strong>
                       <span>{item.price}</span>
                     </div>
 
-                    <div style={styles.row}>
+                    <div style={responsiveRowStyle}>
                       <strong>Stock</strong>
                       <span
                         style={
@@ -177,7 +256,7 @@ export default function Page() {
                       </span>
                     </div>
 
-                    <div style={styles.row}>
+                    <div style={responsiveRowStyle}>
                       <strong>Produit</strong>
                       <a
                         href={item.productUrl}
@@ -190,9 +269,13 @@ export default function Page() {
                     </div>
                   </div>
 
-                  <div style={styles.actions}>
+                  <div style={responsiveActionsStyle}>
                     <button
-                      style={isCopied ? styles.copyButtonSuccess : styles.copyButton}
+                      style={
+                        isCopied
+                          ? responsiveCopyButtonSuccessStyle
+                          : responsiveCopyButtonStyle
+                      }
                       onClick={() => handleSmartCopy(item)}
                     >
                       {isCopied ? 'Copié' : 'Copier / afficher'}
@@ -229,7 +312,15 @@ export default function Page() {
   );
 }
 
-function ImageBox({ src, label }: { src: string; label: string }) {
+function ImageBox({
+  src,
+  label,
+  isMobile,
+}: {
+  src: string;
+  label: string;
+  isMobile: boolean;
+}) {
   if (!src) {
     return <div style={{ ...styles.imageBox, ...styles.emptyImageBox }} />;
   }
@@ -242,7 +333,13 @@ function ImageBox({ src, label }: { src: string; label: string }) {
       style={styles.imageLink}
       title="Ouvrir l’image"
     >
-      <div style={styles.imageBox}>
+      <div
+        style={{
+          ...styles.imageBox,
+          width: isMobile ? '60px' : undefined,
+          borderRadius: isMobile ? '7px' : '8px',
+        }}
+      >
         <img src={src} alt={label} style={styles.image} />
         <div style={styles.imageLabel}>{label}</div>
       </div>
