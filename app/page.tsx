@@ -74,7 +74,8 @@ const fakeResults: Item[] = [
 
 export default function Page() {
   const [query, setQuery] = useState("");
-  const [manualCopyText, setManualCopyText] = useState("");
+  const [openCopyId, setOpenCopyId] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const filteredResults = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -89,20 +90,27 @@ export default function Page() {
     });
   }, [query]);
 
-  async function handleCopy(text: string) {
+  async function handleSmartCopy(item: Item) {
+    const text = `${item.sku} - ${item.variant} - ${item.price}`;
+
     try {
       await navigator.clipboard.writeText(text);
-      setManualCopyText(text);
-    } catch {
-      setManualCopyText(text);
+      setCopiedId(item.id);
+      setOpenCopyId(null);
+
       setTimeout(() => {
-        const el = document.getElementById("manual-copy-input") as HTMLInputElement | null;
+        setCopiedId((prev) => (prev === item.id ? null : prev));
+      }, 1400);
+    } catch {
+      setOpenCopyId(item.id);
+
+      setTimeout(() => {
+        const el = document.getElementById(`copy-input-${item.id}`) as HTMLInputElement | null;
         if (el) {
           el.focus();
           el.select();
         }
       }, 50);
-      alert("Copie automatique bloquée. Le texte est placé dans la zone de secours, puis fais Ctrl+C.");
     }
   }
 
@@ -135,54 +143,63 @@ export default function Page() {
           {filteredResults.length} variante(s) affichée(s)
         </div>
 
-        <div style={styles.manualCopyBox}>
-          <div style={styles.manualCopyLabel}>
-            Zone de copie manuelle de secours
-          </div>
-          <input
-            id="manual-copy-input"
-            type="text"
-            value={manualCopyText}
-            readOnly
-            style={styles.manualCopyInput}
-            placeholder="Le texte à copier apparaîtra ici"
-            onFocus={(e) => e.currentTarget.select()}
-          />
-        </div>
-
         <div style={styles.results}>
           {filteredResults.map((item) => {
             const copyText = `${item.sku} - ${item.variant} - ${item.price}`;
+            const isOpen = openCopyId === item.id;
+            const isCopied = copiedId === item.id;
 
             return (
-              <div key={item.id} style={styles.card}>
-                <div style={styles.images}>
-                  <ImageBox src={item.variantImage} label="Var." />
-                  <ImageBox src={item.image1} label="1" />
-                  <ImageBox src={item.image2} label="2" />
-                  <ImageBox src={item.image3} label="3" />
-                </div>
+              <div key={item.id} style={styles.cardWrap}>
+                <div style={styles.card}>
+                  <div style={styles.images}>
+                    <ImageBox src={item.variantImage} label="Var." />
+                    <ImageBox src={item.image1} label="1" />
+                    <ImageBox src={item.image2} label="2" />
+                    <ImageBox src={item.image3} label="3" />
+                  </div>
 
-                <div style={styles.meta}>
-                  <div style={styles.row}><strong>SKU</strong><span>{item.sku}</span></div>
-                  <div style={styles.row}><strong>Variante</strong><span>{item.variant}</span></div>
-                  <div style={styles.row}><strong>Prix</strong><span>{item.price}</span></div>
-                  <div style={styles.row}>
-                    <strong>Stock</strong>
-                    <span style={item.stock === 0 ? styles.stockZero : item.stock <= 2 ? styles.stockLow : styles.stockOk}>
-                      {item.stock}
-                    </span>
+                  <div style={styles.meta}>
+                    <div style={styles.row}><strong>SKU</strong><span>{item.sku}</span></div>
+                    <div style={styles.row}><strong>Variante</strong><span>{item.variant}</span></div>
+                    <div style={styles.row}><strong>Prix</strong><span>{item.price}</span></div>
+                    <div style={styles.row}>
+                      <strong>Stock</strong>
+                      <span style={item.stock === 0 ? styles.stockZero : item.stock <= 2 ? styles.stockLow : styles.stockOk}>
+                        {item.stock}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={styles.actions}>
+                    <button
+                      style={isCopied ? styles.copyButtonSuccess : styles.copyButton}
+                      onClick={() => handleSmartCopy(item)}
+                    >
+                      {isCopied ? 'Copié' : 'Copier / afficher'}
+                    </button>
                   </div>
                 </div>
 
-                <div style={styles.actions}>
-                  <button
-                    style={styles.copyButton}
-                    onClick={() => handleCopy(copyText)}
-                  >
-                    Copier
-                  </button>
-                </div>
+                {isOpen && (
+                  <div style={styles.copyPanel}>
+                    <div style={styles.copyPanelLabel}>
+                      Texte à copier
+                    </div>
+                    <input
+                      id={`copy-input-${item.id}`}
+                      type="text"
+                      readOnly
+                      value={copyText}
+                      style={styles.copyPanelInput}
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <div style={styles.copyHint}>
+                      Sur iPad : appui dans le champ puis copier.  
+                      Sur ordinateur : Ctrl+C après sélection automatique.
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -200,10 +217,18 @@ export default function Page() {
 
 function ImageBox({ src, label }: { src: string; label: string }) {
   return (
-    <div style={styles.imageBox}>
-      <img src={src} alt={label} style={styles.image} />
-      <div style={styles.imageLabel}>{label}</div>
-    </div>
+    <a
+      href={src}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={styles.imageLink}
+      title="Ouvrir l’image"
+    >
+      <div style={styles.imageBox}>
+        <img src={src} alt={label} style={styles.image} />
+        <div style={styles.imageLabel}>{label}</div>
+      </div>
+    </a>
   );
 }
 
@@ -261,35 +286,17 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#bdbdbd",
     fontSize: "13px",
   },
-  manualCopyBox: {
-    marginBottom: "12px",
-    padding: "10px",
-    borderRadius: "12px",
-    border: "1px solid #2c2c2c",
-    background: "#1a1a1a",
-  },
-  manualCopyLabel: {
-    marginBottom: "6px",
-    color: "#bdbdbd",
-    fontSize: "12px",
-  },
-  manualCopyInput: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "10px",
-    border: "1px solid #333",
-    background: "#101010",
-    color: "#fff",
-    fontSize: "14px",
-    boxSizing: "border-box",
-  },
   results: {
     display: "grid",
     gap: "10px",
   },
+  cardWrap: {
+    display: "grid",
+    gap: "8px",
+  },
   card: {
     display: "grid",
-    gridTemplateColumns: "260px minmax(0, 1fr) 130px",
+    gridTemplateColumns: "260px minmax(0, 1fr) 140px",
     gap: "12px",
     background: "#1a1a1a",
     border: "1px solid #2c2c2c",
@@ -301,6 +308,10 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(4, 1fr)",
     gap: "6px",
+  },
+  imageLink: {
+    display: "block",
+    textDecoration: "none",
   },
   imageBox: {
     position: "relative",
@@ -324,6 +335,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(0,0,0,.72)",
     padding: "3px 5px",
     borderRadius: "20px",
+    color: "#fff",
   },
   meta: {
     display: "grid",
@@ -349,6 +361,42 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#fff",
     fontWeight: 700,
     cursor: "pointer",
+  },
+  copyButtonSuccess: {
+    width: "100%",
+    padding: "11px 12px",
+    borderRadius: "10px",
+    border: "none",
+    background: "#2d9d55",
+    color: "#fff",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  copyPanel: {
+    padding: "10px",
+    borderRadius: "12px",
+    background: "#151515",
+    border: "1px solid #2c2c2c",
+  },
+  copyPanelLabel: {
+    marginBottom: "6px",
+    fontSize: "12px",
+    color: "#bdbdbd",
+  },
+  copyPanelInput: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "10px 12px",
+    borderRadius: "10px",
+    border: "1px solid #333",
+    background: "#0f0f0f",
+    color: "#fff",
+    fontSize: "14px",
+  },
+  copyHint: {
+    marginTop: "6px",
+    fontSize: "12px",
+    color: "#9f9f9f",
   },
   stockOk: {
     color: "#7ee28a",
