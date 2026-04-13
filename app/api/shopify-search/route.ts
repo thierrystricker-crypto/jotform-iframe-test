@@ -3,36 +3,38 @@ import { NextRequest, NextResponse } from 'next/server';
 const SHOP = process.env.SHOPIFY_STORE_DOMAIN;
 const TOKEN = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
 
+type ShopifyProduct = {
+  title: string;
+  handle: string;
+  onlineStoreUrl: string | null;
+  images?: {
+    nodes?: Array<{
+      url: string;
+      altText: string | null;
+    }>;
+  };
+  variants?: {
+    nodes?: Array<{
+      id: string;
+      title: string;
+      sku: string | null;
+      quantityAvailable: number | null;
+      image?: {
+        url: string;
+        altText: string | null;
+      } | null;
+      price: {
+        amount: string;
+        currencyCode: string;
+      };
+    }>;
+  };
+};
+
 type ShopifyResponse = {
   data?: {
     search?: {
-      nodes?: Array<{
-        title: string;
-        handle: string;
-        onlineStoreUrl: string | null;
-        images?: {
-          nodes?: Array<{
-            url: string;
-            altText: string | null;
-          }>;
-        };
-        variants?: {
-          nodes?: Array<{
-            id: string;
-            title: string;
-            sku: string | null;
-            quantityAvailable: number | null;
-            image?: {
-              url: string;
-              altText: string | null;
-            } | null;
-            price: {
-              amount: string;
-              currencyCode: string;
-            };
-          }>;
-        };
-      }>;
+      nodes?: ShopifyProduct[];
     };
   };
   errors?: unknown;
@@ -46,7 +48,7 @@ function normalize(text: string) {
     .trim();
 }
 
-async function runShopifySearch(query: string) {
+async function runShopifySearch(query: string): Promise<ShopifyProduct[]> {
   const graphqlQuery = `
     query SearchProducts($query: String!) {
       search(first: 20, types: PRODUCT, query: $query) {
@@ -124,13 +126,10 @@ export async function GET(request: NextRequest) {
     const words = normalizedQuery.split(/\s+/).filter(Boolean);
 
     const searchQueries = Array.from(
-      new Set([
-        rawQuery,
-        ...words,
-      ])
+      new Set([rawQuery, ...words])
     ).filter(Boolean);
 
-    const allProductsMap = new Map<string, Awaited<ReturnType<typeof runShopifySearch>>[number]>();
+    const allProductsMap = new Map<string, ShopifyProduct>();
 
     for (const q of searchQueries) {
       try {
@@ -139,7 +138,7 @@ export async function GET(request: NextRequest) {
           allProductsMap.set(product.handle, product);
         }
       } catch {
-        // on ignore une recherche partielle qui échoue
+        // ignore une recherche partielle qui échoue
       }
     }
 
@@ -162,26 +161,27 @@ export async function GET(request: NextRequest) {
           return words.every((word) => haystack.includes(word));
         })
         .map((variant) => {
-  const variantNumericId = variant.id.split('/').pop() || '';
+          const variantNumericId = variant.id.split('/').pop() || '';
 
-  return {
-    id: variant.id,
-    sku: variant.sku ?? '',
-    variant:
-      variant.title && variant.title !== 'Default Title'
-        ? `${product.title} / ${variant.title}`
-        : product.title,
-    price: Number(variant.price.amount).toFixed(2),
-    stock: variant.quantityAvailable ?? 0,
-    productUrl: product.onlineStoreUrl
-      ? `${product.onlineStoreUrl}?variant=${variantNumericId}`
-      : `https://${SHOP}/products/${product.handle}?variant=${variantNumericId}`,
-    variantImage: variant.image?.url || productImages[0]?.url || '',
-    image1: productImages[1]?.url || '',
-    image2: productImages[2]?.url || '',
-    image3: productImages[3]?.url || '',
-  };
-});
+          return {
+            id: variant.id,
+            sku: variant.sku ?? '',
+            variant:
+              variant.title && variant.title !== 'Default Title'
+                ? `${product.title} / ${variant.title}`
+                : product.title,
+            price: Number(variant.price.amount).toFixed(2),
+            stock: variant.quantityAvailable ?? 0,
+            productUrl: product.onlineStoreUrl
+              ? `${product.onlineStoreUrl}?variant=${variantNumericId}`
+              : `https://${SHOP}/products/${product.handle}?variant=${variantNumericId}`,
+            variantImage: variant.image?.url || productImages[0]?.url || '',
+            image1: productImages[1]?.url || '',
+            image2: productImages[2]?.url || '',
+            image3: productImages[3]?.url || '',
+          };
+        });
+    });
 
     return NextResponse.json({ items });
   } catch (error) {
