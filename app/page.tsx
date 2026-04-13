@@ -146,32 +146,37 @@ export default function Page() {
                     <ImageBox src={item.image3} label="4" />
                   </div>
 
-                  <div style={styles.row}>
-  <strong>Variante</strong>
-  <span style={styles.variantText}>{item.variant}</span>
-</div>
+                  <div style={styles.meta}>
+                    <div style={styles.row}>
+                      <strong>SKU</strong>
+                      <span>{item.sku || '—'}</span>
+                    </div>
+
                     <div style={styles.row}>
                       <strong>Variante</strong>
-                      <span>{item.variant}</span>
+                      <span style={styles.variantText}>{item.variant}</span>
                     </div>
+
                     <div style={styles.row}>
                       <strong>Prix</strong>
                       <span>{item.price}</span>
                     </div>
+
                     <div style={styles.row}>
-  <strong>Stock</strong>
-  <span
-    style={
-      item.stock === 0
-        ? styles.stockZero
-        : item.stock <= 2
-          ? styles.stockLow
-          : styles.stockOk
-    }
-  >
-    {item.stock} {item.stock > 1 ? 'pces' : 'pce'}
-  </span>
-</div>
+                      <strong>Stock</strong>
+                      <span
+                        style={
+                          item.stock === 0
+                            ? styles.stockZero
+                            : item.stock <= 2
+                              ? styles.stockLow
+                              : styles.stockOk
+                        }
+                      >
+                        {item.stock} {item.stock > 1 ? 'pces' : 'pce'}
+                      </span>
+                    </div>
+
                     <div style={styles.row}>
                       <strong>Produit</strong>
                       <a
