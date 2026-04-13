@@ -161,23 +161,27 @@ export async function GET(request: NextRequest) {
 
           return words.every((word) => haystack.includes(word));
         })
-        .map((variant) => ({
-          id: variant.id,
-          sku: variant.sku ?? '',
-          variant:
-            variant.title && variant.title !== 'Default Title'
-              ? `${product.title} / ${variant.title}`
-              : product.title,
-          price: Number(variant.price.amount).toFixed(2),
-          stock: variant.quantityAvailable ?? 0,
-          productUrl:
-            product.onlineStoreUrl ?? `https://${SHOP}/products/${product.handle}`,
-          variantImage: variant.image?.url || productImages[0]?.url || '',
-          image1: productImages[1]?.url || '',
-          image2: productImages[2]?.url || '',
-          image3: productImages[3]?.url || '',
-        }));
-    });
+        .map((variant) => {
+  const variantNumericId = variant.id.split('/').pop() || '';
+
+  return {
+    id: variant.id,
+    sku: variant.sku ?? '',
+    variant:
+      variant.title && variant.title !== 'Default Title'
+        ? `${product.title} / ${variant.title}`
+        : product.title,
+    price: Number(variant.price.amount).toFixed(2),
+    stock: variant.quantityAvailable ?? 0,
+    productUrl: product.onlineStoreUrl
+      ? `${product.onlineStoreUrl}?variant=${variantNumericId}`
+      : `https://${SHOP}/products/${product.handle}?variant=${variantNumericId}`,
+    variantImage: variant.image?.url || productImages[0]?.url || '',
+    image1: productImages[1]?.url || '',
+    image2: productImages[2]?.url || '',
+    image3: productImages[3]?.url || '',
+  };
+});
 
     return NextResponse.json({ items });
   } catch (error) {
