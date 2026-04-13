@@ -46,6 +46,65 @@ function normalize(text: string) {
     .trim();
 }
 
+async function runShopifySearch(query: string) {
+  const graphqlQuery = `
+    query SearchProducts($query: String!) {
+      search(first: 20, types: PRODUCT, query: $query) {
+        nodes {
+          ... on Product {
+            title
+            handle
+            onlineStoreUrl
+            images(first: 4) {
+              nodes {
+                url
+                altText
+              }
+            }
+            variants(first: 100) {
+              nodes {
+                id
+                title
+                sku
+                quantityAvailable
+                image {
+                  url
+                  altText
+                }
+                price {
+                  amount
+                  currencyCode
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const response = await fetch(`https://${SHOP}/api/2026-04/graphql.json`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Shopify-Storefront-Access-Token': TOKEN as string,
+    },
+    body: JSON.stringify({
+      query: graphqlQuery,
+      variables: { query },
+    }),
+    cache: 'no-store',
+  });
+
+  const json = (await response.json()) as ShopifyResponse;
+
+  if (!response.ok || json.errors) {
+    throw new Error('Erreur Shopify');
+  }
+
+  return json.data?.search?.nodes ?? [];
+}
+
 export async function GET(request: NextRequest) {
   try {
     if (!SHOP || !TOKEN) {
@@ -61,71 +120,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ items: [] });
     }
 
-    const words = normalize(rawQuery)
-      .split(/\s+/)
-      .filter(Boolean);
+    const normalizedQuery = normalize(rawQuery);
+    const words = normalizedQuery.split(/\s+/).filter(Boolean);
 
-    const broadQuery = words.length === 1 ? words[0] : words.join(' OR ');
+    const searchQueries = Array.from(
+      new Set([
+        rawQuery,
+        ...words,
+      ])
+    ).filter(Boolean);
 
-    const graphqlQuery = `
-      query SearchProducts($query: String!) {
-        search(first: 20, types: PRODUCT, query: $query) {
-          nodes {
-            ... on Product {
-              title
-              handle
-              onlineStoreUrl
-              images(first: 4) {
-                nodes {
-                  url
-                  altText
-                }
-              }
-              variants(first: 100) {
-                nodes {
-                  id
-                  title
-                  sku
-                  quantityAvailable
-                  image {
-                    url
-                    altText
-                  }
-                  price {
-                    amount
-                    currencyCode
-                  }
-                }
-              }
-            }
-          }
+    const allProductsMap = new Map<string, Awaited<ReturnType<typeof runShopifySearch>>[number]>();
+
+    for (const q of searchQueries) {
+      try {
+        const products = await runShopifySearch(q);
+        for (const product of products) {
+          allProductsMap.set(product.handle, product);
         }
+      } catch {
+        // on ignore une recherche partielle qui échoue
       }
-    `;
-
-    const response = await fetch(`https://${SHOP}/api/2026-04/graphql.json`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Storefront-Access-Token': TOKEN,
-      },
-      body: JSON.stringify({
-        query: graphqlQuery,
-        variables: { query: broadQuery },
-      }),
-      cache: 'no-store',
-    });
-
-    const json = (await response.json()) as ShopifyResponse;
-
-    if (!response.ok || json.errors) {
-      return NextResponse.json(
-        { error: 'Erreur Shopify', details: json.errors ?? null },
-        { status: 500 }
-      );
     }
 
-    const products = json.data?.search?.nodes ?? [];
+    const products = Array.from(allProductsMap.values());
 
     const items = products.flatMap((product) => {
       const productImages = product.images?.nodes ?? [];
