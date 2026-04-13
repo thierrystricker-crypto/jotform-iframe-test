@@ -62,6 +62,7 @@ export default function Page() {
     }
 
     const t = setTimeout(runSearch, 250);
+
     return () => {
       clearTimeout(t);
       controller.abort();
@@ -123,8 +124,8 @@ export default function Page() {
           {!trimmedQuery
             ? 'Tape une recherche pour interroger Shopify.'
             : loading
-            ? 'Recherche en cours…'
-            : `${items.length} variante(s) affichée(s)`}
+              ? 'Recherche en cours…'
+              : `${items.length} variante(s) affichée(s)`}
         </div>
 
         {error && <div style={styles.errorBox}>{error}</div>}
@@ -140,24 +141,46 @@ export default function Page() {
                 <div style={styles.card}>
                   <div style={styles.images}>
                     <ImageBox src={item.variantImage} label="Var." />
-                    <ImageBox src={item.image1} label="1" />
-                    <ImageBox src={item.image2} label="2" />
-                    <ImageBox src={item.image3} label="3" />
+                    <ImageBox src={item.image1} label="2" />
+                    <ImageBox src={item.image2} label="3" />
+                    <ImageBox src={item.image3} label="4" />
                   </div>
 
                   <div style={styles.meta}>
-                    <div style={styles.row}><strong>SKU</strong><span>{item.sku || '—'}</span></div>
-                    <div style={styles.row}><strong>Variante</strong><span>{item.variant}</span></div>
-                    <div style={styles.row}><strong>Prix</strong><span>{item.price}</span></div>
+                    <div style={styles.row}>
+                      <strong>SKU</strong>
+                      <span>{item.sku || '—'}</span>
+                    </div>
+                    <div style={styles.row}>
+                      <strong>Variante</strong>
+                      <span>{item.variant}</span>
+                    </div>
+                    <div style={styles.row}>
+                      <strong>Prix</strong>
+                      <span>{item.price}</span>
+                    </div>
                     <div style={styles.row}>
                       <strong>Stock</strong>
-                      <span style={item.stock === 0 ? styles.stockZero : item.stock <= 2 ? styles.stockLow : styles.stockOk}>
+                      <span
+                        style={
+                          item.stock === 0
+                            ? styles.stockZero
+                            : item.stock <= 2
+                              ? styles.stockLow
+                              : styles.stockOk
+                        }
+                      >
                         {item.stock}
                       </span>
                     </div>
                     <div style={styles.row}>
                       <strong>Produit</strong>
-                      <a href={item.productUrl} target="_blank" rel="noopener noreferrer" style={styles.link}>
+                      <a
+                        href={item.productUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={styles.link}
+                      >
                         Ouvrir
                       </a>
                     </div>

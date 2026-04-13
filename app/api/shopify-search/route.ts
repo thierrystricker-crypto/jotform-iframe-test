@@ -38,6 +38,14 @@ type ShopifyResponse = {
   errors?: unknown;
 };
 
+function normalize(text: string) {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
 export async function GET(request: NextRequest) {
   try {
     if (!SHOP || !TOKEN) {
@@ -47,21 +55,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const q = request.nextUrl.searchParams.get('q')?.trim() || '';
+    const rawQuery = request.nextUrl.searchParams.get('q')?.trim() || '';
 
-    if (!q) {
+    if (!rawQuery) {
       return NextResponse.json({ items: [] });
     }
 
+    const words = normalize(rawQuery)
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const broadQuery = words.length === 1 ? words[0] : words.join(' OR ');
+
     const graphqlQuery = `
       query SearchProducts($query: String!) {
-        search(first: 12, types: PRODUCT, query: $query) {
+        search(first: 20, types: PRODUCT, query: $query) {
           nodes {
             ... on Product {
               title
               handle
               onlineStoreUrl
-              images(first: 3) {
+              images(first: 4) {
                 nodes {
                   url
                   altText
@@ -97,7 +111,7 @@ export async function GET(request: NextRequest) {
       },
       body: JSON.stringify({
         query: graphqlQuery,
-        variables: { query: q },
+        variables: { query: broadQuery },
       }),
       cache: 'no-store',
     });
@@ -119,15 +133,15 @@ export async function GET(request: NextRequest) {
 
       return variants
         .filter((variant) => {
-          const haystack = [
-            product.title,
-            variant.title ?? '',
-            variant.sku ?? '',
-          ]
-            .join(' ')
-            .toLowerCase();
+          const haystack = normalize(
+            [
+              product.title,
+              variant.title ?? '',
+              variant.sku ?? '',
+            ].join(' ')
+          );
 
-          return haystack.includes(q.toLowerCase());
+          return words.every((word) => haystack.includes(word));
         })
         .map((variant) => ({
           id: variant.id,
@@ -143,11 +157,12 @@ export async function GET(request: NextRequest) {
             maximumFractionDigits: 2,
           }).format(Number(variant.price.amount)),
           stock: variant.quantityAvailable ?? 0,
-          productUrl: product.onlineStoreUrl ?? `https://${SHOP}/products/${product.handle}`,
+          productUrl:
+            product.onlineStoreUrl ?? `https://${SHOP}/products/${product.handle}`,
           variantImage: variant.image?.url || productImages[0]?.url || '',
-          image1: productImages[0]?.url || '',
-          image2: productImages[1]?.url || '',
-          image3: productImages[2]?.url || '',
+          image1: productImages[1]?.url || '',
+          image2: productImages[2]?.url || '',
+          image3: productImages[3]?.url || '',
         }));
     });
 
