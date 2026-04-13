@@ -1,6 +1,10 @@
 'use client';
 
+import { useState } from 'react';
+
 export default function Page() {
+  const [manualCopyText, setManualCopyText] = useState("");
+
   const fakeResults = [
     {
       id: 1,
@@ -37,6 +41,25 @@ export default function Page() {
     },
   ];
 
+  async function handleCopy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Texte copié.");
+    } catch {
+      setManualCopyText(text);
+
+      setTimeout(() => {
+        const el = document.getElementById("manual-copy-input") as HTMLInputElement | null;
+        if (el) {
+          el.focus();
+          el.select();
+        }
+      }, 50);
+
+      alert("Copie automatique bloquée dans l’iframe.\nLe texte est sélectionné en bas : fais Ctrl+C.");
+    }
+  }
+
   return (
     <main style={styles.page}>
       <div style={styles.container}>
@@ -56,43 +79,57 @@ export default function Page() {
 
         <div style={styles.status}>3 variantes de test affichées</div>
 
-        <div style={styles.results}>
-          {fakeResults.map((item) => (
-            <div key={item.id} style={styles.card}>
-              <div style={styles.images}>
-                <ImageBox src={item.variantImage} label="Variante" />
-                <ImageBox src={item.image1} label="Image 1" />
-                <ImageBox src={item.image2} label="Image 2" />
-                <ImageBox src={item.image3} label="Image 3" />
-              </div>
+        <div style={styles.manualCopyBox}>
+          <div style={styles.manualCopyLabel}>
+            Zone de copie manuelle de secours
+          </div>
+          <input
+            id="manual-copy-input"
+            type="text"
+            value={manualCopyText}
+            readOnly
+            style={styles.manualCopyInput}
+            placeholder="Si la copie automatique est bloquée, le texte apparaîtra ici"
+            onFocus={(e) => e.currentTarget.select()}
+          />
+        </div>
 
-              <div style={styles.meta}>
-                <div><strong>SKU :</strong> {item.sku}</div>
-                <div><strong>Variante :</strong> {item.variant}</div>
-                <div><strong>Prix :</strong> {item.price}</div>
-                <div>
-                  <strong>Stock :</strong>{" "}
-                  <span style={item.stock === 0 ? styles.stockZero : styles.stockOk}>
-                    {item.stock}
-                  </span>
+        <div style={styles.results}>
+          {fakeResults.map((item) => {
+            const copyText = `${item.sku} - ${item.variant} - ${item.price}`;
+
+            return (
+              <div key={item.id} style={styles.card}>
+                <div style={styles.images}>
+                  <ImageBox src={item.variantImage} label="Variante" />
+                  <ImageBox src={item.image1} label="Image 1" />
+                  <ImageBox src={item.image2} label="Image 2" />
+                  <ImageBox src={item.image3} label="Image 3" />
+                </div>
+
+                <div style={styles.meta}>
+                  <div><strong>SKU :</strong> {item.sku}</div>
+                  <div><strong>Variante :</strong> {item.variant}</div>
+                  <div><strong>Prix :</strong> {item.price}</div>
+                  <div>
+                    <strong>Stock :</strong>{" "}
+                    <span style={item.stock === 0 ? styles.stockZero : styles.stockOk}>
+                      {item.stock}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={styles.actions}>
+                  <button
+                    style={styles.copyButton}
+                    onClick={() => handleCopy(copyText)}
+                  >
+                    Copier
+                  </button>
                 </div>
               </div>
-
-              <div style={styles.actions}>
-                <button
-                  style={styles.copyButton}
-                  onClick={() => {
-                    navigator.clipboard.writeText(
-                      `${item.sku} - ${item.variant} - ${item.price}`
-                    );
-                    alert("Texte copié :\n" + `${item.sku} - ${item.variant} - ${item.price}`);
-                  }}
-                >
-                  Copier
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </main>
@@ -157,6 +194,28 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: "14px",
     color: "#bdbdbd",
     fontSize: "14px",
+  },
+  manualCopyBox: {
+    marginBottom: "16px",
+    padding: "12px",
+    borderRadius: "12px",
+    border: "1px solid #2c2c2c",
+    background: "#1a1a1a",
+  },
+  manualCopyLabel: {
+    marginBottom: "8px",
+    color: "#bdbdbd",
+    fontSize: "13px",
+  },
+  manualCopyInput: {
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: "10px",
+    border: "1px solid #333",
+    background: "#101010",
+    color: "#fff",
+    fontSize: "15px",
+    boxSizing: "border-box",
   },
   results: {
     display: "grid",
