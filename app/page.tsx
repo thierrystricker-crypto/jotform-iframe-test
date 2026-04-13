@@ -83,31 +83,25 @@ export default function Page() {
     };
   }, [trimmedQuery]);
 
-  async function handleSmartCopy(item: Item) {
-    const text = `${item.sku} - ${item.variant} - ${item.price}`;
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(item.id);
-      setOpenCopyId(null);
-
-      setTimeout(() => {
-        setCopiedId((prev) => (prev === item.id ? null : prev));
-      }, 1400);
-    } catch {
-      setOpenCopyId(item.id);
-
-      setTimeout(() => {
-        const el = document.getElementById(
-          `copy-input-${item.id}`
-        ) as HTMLInputElement | null;
-        if (el) {
-          el.focus();
-          el.select();
-        }
-      }, 50);
-    }
+  function handleSmartCopy(item: Item) {
+  if (openCopyId === item.id) {
+    setOpenCopyId(null);
+    return;
   }
+
+  setOpenCopyId(item.id);
+  setCopiedId(null);
+
+  setTimeout(() => {
+    const el = document.getElementById(
+      `copy-input-${item.id}`
+    ) as HTMLInputElement | null;
+    if (el) {
+      el.focus();
+      el.select();
+    }
+  }, 50);
+}
 
   function handleClear() {
     setQuery('');
@@ -278,7 +272,7 @@ export default function Page() {
                       }
                       onClick={() => handleSmartCopy(item)}
                     >
-                      {isCopied ? 'Copié' : 'Copier / afficher'}
+                      {isOpen ? 'Masquer le texte' : 'Afficher texte à copier'}
                     </button>
                   </div>
                 </div>
