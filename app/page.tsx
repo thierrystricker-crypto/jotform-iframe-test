@@ -20,7 +20,6 @@ export default function Page() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
   const [openCopyId, setOpenCopyId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [viewportWidth, setViewportWidth] = useState<number>(1400);
 
@@ -84,29 +83,29 @@ export default function Page() {
   }, [trimmedQuery]);
 
   function handleSmartCopy(item: Item) {
-  if (openCopyId === item.id) {
-    setOpenCopyId(null);
-    return;
-  }
-
-  setOpenCopyId(item.id);
-  setCopiedId(null);
-
-  setTimeout(() => {
-    const el = document.getElementById(
-      `copy-input-${item.id}`
-    ) as HTMLInputElement | null;
-    if (el) {
-      el.focus();
-      el.select();
+    if (openCopyId === item.id) {
+      setOpenCopyId(null);
+      return;
     }
-  }, 50);
-}
+
+    setOpenCopyId(item.id);
+
+    setTimeout(() => {
+      const el = document.getElementById(
+        `copy-input-${item.id}`
+      ) as HTMLInputElement | null;
+      if (el) {
+        el.focus();
+        el.select();
+      }
+    }, 50);
+  }
 
   function handleClear() {
     setQuery('');
     setItems([]);
     setError('');
+    setOpenCopyId(null);
   }
 
   const isMobile = viewportWidth < 700;
@@ -143,11 +142,6 @@ export default function Page() {
 
   const responsiveCopyButtonStyle: React.CSSProperties = {
     ...styles.copyButton,
-    width: '100%',
-  };
-
-  const responsiveCopyButtonSuccessStyle: React.CSSProperties = {
-    ...styles.copyButtonSuccess,
     width: '100%',
   };
 
@@ -207,16 +201,15 @@ export default function Page() {
           {items.map((item) => {
             const copyText = `${item.sku} - ${item.variant} - ${item.price}`;
             const isOpen = openCopyId === item.id;
-            const isCopied = copiedId === item.id;
 
             return (
               <div key={item.id} style={styles.cardWrap}>
                 <div style={responsiveCardStyle}>
                   <div style={responsiveImagesStyle}>
-                    <ImageBox src={item.variantImage} label="Var." isMobile={isMobile} />
-                    <ImageBox src={item.image1} label="2" isMobile={isMobile} />
-                    <ImageBox src={item.image2} label="3" isMobile={isMobile} />
-                    <ImageBox src={item.image3} label="4" isMobile={isMobile} />
+                    <ImageBox src={item.variantImage} label="Image variante" isMobile={isMobile} />
+                    <ImageBox src={item.image1} label="Image 2" isMobile={isMobile} />
+                    <ImageBox src={item.image2} label="Image 3" isMobile={isMobile} />
+                    <ImageBox src={item.image3} label="Image 4" isMobile={isMobile} />
                   </div>
 
                   <div style={styles.meta}>
@@ -265,14 +258,10 @@ export default function Page() {
 
                   <div style={responsiveActionsStyle}>
                     <button
-                      style={
-                        isCopied
-                          ? responsiveCopyButtonSuccessStyle
-                          : responsiveCopyButtonStyle
-                      }
+                      style={responsiveCopyButtonStyle}
                       onClick={() => handleSmartCopy(item)}
                     >
-                      {isOpen ? 'Masquer le texte' : 'Afficher texte à copier'}
+                      {isOpen ? 'Masquer le texte' : 'Texte à copier'}
                     </button>
                   </div>
                 </div>
@@ -325,7 +314,7 @@ function ImageBox({
       target="_blank"
       rel="noopener noreferrer"
       style={styles.imageLink}
-      title="Ouvrir l’image"
+      title={label}
     >
       <div
         style={{
@@ -335,7 +324,6 @@ function ImageBox({
         }}
       >
         <img src={src} alt={label} style={styles.image} />
-        <div style={styles.imageLabel}>{label}</div>
       </div>
     </a>
   );
@@ -447,16 +435,6 @@ const styles: Record<string, React.CSSProperties> = {
     objectFit: 'cover',
     display: 'block',
   },
-  imageLabel: {
-    position: 'absolute',
-    left: '4px',
-    bottom: '4px',
-    fontSize: '10px',
-    background: 'rgba(0,0,0,.72)',
-    padding: '3px 5px',
-    borderRadius: '20px',
-    color: '#fff',
-  },
   meta: {
     display: 'grid',
     gap: '6px',
@@ -484,16 +462,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '10px',
     border: 'none',
     background: '#2d6cdf',
-    color: '#fff',
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-  copyButtonSuccess: {
-    width: '100%',
-    padding: '11px 12px',
-    borderRadius: '10px',
-    border: 'none',
-    background: '#2d9d55',
     color: '#fff',
     fontWeight: 700,
     cursor: 'pointer',
