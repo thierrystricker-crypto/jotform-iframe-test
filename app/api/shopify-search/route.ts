@@ -150,12 +150,7 @@ export async function GET(request: NextRequest) {
             variant.title && variant.title !== 'Default Title'
               ? `${product.title} / ${variant.title}`
               : product.title,
-          price: new Intl.NumberFormat('fr-CH', {
-            style: 'currency',
-            currency: variant.price.currencyCode || 'CHF',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-          }).format(Number(variant.price.amount)),
+          price: Number(variant.price.amount).toFixed(2),
           stock: variant.quantityAvailable ?? 0,
           productUrl:
             product.onlineStoreUrl ?? `https://${SHOP}/products/${product.handle}`,
